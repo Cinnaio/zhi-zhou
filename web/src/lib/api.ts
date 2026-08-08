@@ -143,6 +143,9 @@ export const novelsApi = {
   remove(id: string): Promise<{ success: boolean }> {
     return request('DELETE', `/novels/${encodeURIComponent(id)}`, null, true)
   },
+  batchDelete(ids: string[]): Promise<{ ok: boolean }> {
+    return request('POST', '/novels', { action: 'batch-delete', novelIds: ids }, true)
+  },
   categories(): Promise<{ categories: string[] }> {
     return request('GET', '/categories')
   },
@@ -159,6 +162,21 @@ export const chaptersApi = {
   },
   getByOrder(novelId: string, order: number): Promise<{ chapter: ChapterFull }> {
     return request('GET', `/chapters?novelId=${encodeURIComponent(novelId)}&order=${encodeURIComponent(order)}`)
+  },
+  create(data: Record<string, unknown>): Promise<{ chapter: ChapterMeta }> {
+    return request('POST', '/chapters', data, true)
+  },
+  update(id: string, data: Record<string, unknown>): Promise<{ chapter: ChapterMeta }> {
+    return request('PUT', `/chapters/${encodeURIComponent(id)}`, data, true)
+  },
+  remove(id: string): Promise<{ ok: boolean }> {
+    return request('DELETE', `/chapters/${encodeURIComponent(id)}`, null, true)
+  },
+  renameByOrder(data: Record<string, unknown>): Promise<{ ok: boolean }> {
+    return request('POST', '/chapters', { action: 'rename-by-order', ...data }, true)
+  },
+  batchDelete(novelId: string, chapterIds: string[]): Promise<{ ok: boolean }> {
+    return request('POST', '/chapters', { action: 'batch-delete', novelId, chapterIds }, true)
   },
 }
 
@@ -227,6 +245,15 @@ export const bookmarksApi = {
   },
 }
 
+export interface ThoughtAdmin extends Thought {
+  novelTitle: string
+  chapterTitle: string
+  userUsername: string
+  userDisplayName: string
+  clientIdHash: string
+  ipHash: string
+}
+
 // ---------- Thoughts（段评） ----------
 
 export const thoughtsApi = {
@@ -243,6 +270,18 @@ export const thoughtsApi = {
   },
   remove(id: string): Promise<{ ok: boolean }> {
     return request('DELETE', `/thoughts?id=${encodeURIComponent(id)}`, null, true)
+  },
+  /** 管理端列表：admin=1 返回未删除/报告中的段评。 */
+  adminList(params: Record<string, string> = {}): Promise<{ thoughts: ThoughtAdmin[]; total?: number }> {
+    const qs = new URLSearchParams({ ...params, admin: '1' }).toString()
+    return request('GET', `/thoughts${qs ? '?' + qs : ''}`, null, true)
+  },
+  /** 管理端硬删除（绕过软删除，直接从库中移除）。 */
+  hardDelete(id: string): Promise<{ ok: boolean }> {
+    return request('DELETE', `/thoughts?id=${encodeURIComponent(id)}&hard=1`, null, true)
+  },
+  mine(limit = 50): Promise<{ thoughts: Thought[] }> {
+    return request('GET', `/thoughts?mine=1&limit=${encodeURIComponent(limit)}`, null, true)
   },
 }
 
@@ -275,6 +314,9 @@ export const commentsApi = {
   },
   remove(id: string): Promise<{ ok: boolean }> {
     return request('DELETE', `/comments?id=${encodeURIComponent(id)}`, null, true)
+  },
+  hardDelete(id: string): Promise<{ ok: boolean }> {
+    return request('DELETE', `/comments?id=${encodeURIComponent(id)}&hard=1`, null, true)
   },
   like(id: string): Promise<{ ok: boolean }> {
     return request('POST', `/comments/${encodeURIComponent(id)}/like`, null, true)
@@ -375,6 +417,34 @@ export const authApi = {
 
 // ---------- Admin ----------
 
+export interface AdminComment extends Comment {
+  novelTitle: string
+  userUsername: string
+  userDisplayName: string
+  clientIdHash: string
+  ipHash: string
+}
+
+export interface CommentReportItem {
+  id: string
+  commentId: string
+  reportedBy: string
+  reason: string
+  note: string
+  status: string
+  resolvedBy: string
+  resolvedAt: number
+  createdAt: number
+  commentText: string
+  commentStatus: string
+  commentNovelId: string
+  commentAuthor: string
+  novelTitle: string
+  reporterUsername: string
+  reporterDisplayName: string
+  resolverUsername: string
+}
+
 export const adminApi = {
   stats(): Promise<Record<string, unknown>> {
     return request('GET', '/admin/stats', null, true)
@@ -382,6 +452,64 @@ export const adminApi = {
   novelIndex(params: Record<string, string> = {}): Promise<Record<string, unknown>> {
     const qs = new URLSearchParams(params).toString()
     return request('GET', `/admin/novel-index${qs ? '?' + qs : ''}`, null, true)
+  },
+  comments: {
+    list(params: Record<string, string> = {}): Promise<{ comments: AdminComment[]; total?: number }> {
+      const qs = new URLSearchParams(params).toString()
+      return request('GET', `/admin/comments${qs ? '?' + qs : ''}`, null, true)
+    },
+    update(id: string, data: Record<string, unknown>): Promise<{ ok: boolean }> {
+      return request('PUT', '/admin/comments', { id, ...data }, true)
+    },
+    remove(id: string): Promise<{ ok: boolean }> {
+      return request('DELETE', `/admin/comments?id=${encodeURIComponent(id)}`, null, true)
+    },
+  },
+  commentReports: {
+    list(params: Record<string, string> = {}): Promise<{ reports: CommentReportItem[]; total?: number }> {
+      const qs = new URLSearchParams(params).toString()
+      return request('GET', `/admin/comment-reports${qs ? '?' + qs : ''}`, null, true)
+    },
+    update(id: string, data: Record<string, unknown>): Promise<{ ok: boolean }> {
+      return request('PUT', '/admin/comment-reports', { id, ...data }, true)
+    },
+  },
+  users: {
+    list(): Promise<Record<string, unknown>> {
+      return request('GET', '/admin-users', null, true)
+    },
+    setRegisterMode(registerMode: string): Promise<{ ok: boolean }> {
+      return request('POST', '/admin-users', { action: 'settings', registerMode }, true)
+    },
+    createInvites(count: number): Promise<{ invites: unknown[] }> {
+      return request('POST', '/admin-users', { action: 'invite', count }, true)
+    },
+    disableInvite(code: string): Promise<{ ok: boolean }> {
+      return request('POST', '/admin-users', { action: 'disable-invite', code }, true)
+    },
+    clearInvites(): Promise<{ ok: boolean }> {
+      return request('POST', '/admin-users', { action: 'clear-invites' }, true)
+    },
+    setStatus(id: string, status: string): Promise<{ ok: boolean }> {
+      return request('POST', '/admin-users', { action: 'user-status', id, status }, true)
+    },
+    setRole(id: string, role: string): Promise<{ ok: boolean }> {
+      return request('POST', '/admin-users', { action: 'user-role', id, role }, true)
+    },
+    resetPassword(id: string): Promise<{ newPassword?: string }> {
+      return request('POST', '/admin-users', { action: 'reset-password', id }, true)
+    },
+    deleteUser(id: string, confirmUsername: string): Promise<{ ok: boolean }> {
+      return request('POST', '/admin-users', { action: 'delete-user', id, confirmUsername }, true)
+    },
+  },
+}
+
+// ---------- Download logs ----------
+
+export const downloadLogsApi = {
+  list(limit = 50): Promise<{ logs: unknown[] }> {
+    return request('GET', `/download-logs?limit=${encodeURIComponent(limit)}`, null, true)
   },
 }
 
@@ -402,6 +530,17 @@ export const scrapeApi = {
   },
   jobs(): Promise<{ jobs: unknown[] }> {
     return request('GET', '/scrape?action=jobs', null, true)
+  },
+  jobItems(jobId: string, params: Record<string, string> = {}): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams({ action: 'job-items', jobId, ...params }).toString()
+    return request('GET', `/scrape?${qs}`, null, true)
+  },
+  jobLogs(jobId: string, params: Record<string, string> = {}): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams({ action: 'job-logs', jobId, ...params }).toString()
+    return request('GET', `/scrape?${qs}`, null, true)
+  },
+  retryFailed(jobId: string): Promise<{ ok: boolean }> {
+    return request('POST', '/scrape', { action: 'retry-failed', jobId }, true)
   },
   cancel(jobId: string): Promise<{ ok: boolean }> {
     return request('POST', '/scrape', { action: 'cancel', jobId }, true)

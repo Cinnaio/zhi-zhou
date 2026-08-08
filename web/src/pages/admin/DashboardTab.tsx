@@ -1,0 +1,174 @@
+/**
+ * 总览 tab —— 指标卡、任务状态条、最近任务/小说（只读，手动刷新）。
+ * 由 Novel-KV js/admin-dashboard.js 平移。
+ */
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { adminApi } from '../../lib/api'
+import { timeAgo } from '../../lib/format'
+import { jobStatusLabel } from '../../lib/admin'
+
+interface AdminStats {
+  totals: { novels: number; chapters: number; users: number; covers: number; failedJobs: number; todayChapters: number; dbSize: number | null }
+  jobStatus: { running: number; completed: number; failed: number }
+  recentJobs: Array<{ id: string; novelId: string; novelTitle: string; status: string; step: string; current: number; total: number; chapterCount: number; progress: number; error: string; startedAt: number; updatedAt: number }>
+  recentNovels: Array<{ id: string; title: string; author: string; chapterCount: number; updatedAt: number }>
+}
+
+const STAT_CARDS: Array<{ label: string; key: keyof AdminStats['totals']; unit: string; mark: string }> = [
+  { label: '小说总数', key: 'novels', unit: '本', mark: '馆' },
+  { label: '章节总数', key: 'chapters', unit: '章', mark: '章' },
+  { label: '用户数', key: 'users', unit: '人', mark: '客' },
+  { label: '今日新增章节', key: 'todayChapters', unit: '章', mark: '今' },
+  { label: '失败任务', key: 'failedJobs', unit: '个', mark: '警' },
+  { label: '封面缓存', key: 'covers', unit: '张', mark: '封' },
+  { label: '数据库大小', key: 'dbSize', unit: '', mark: '库' },
+]
+
+function formatNumber(value: number | string): string {
+  if (value === '—') return '—'
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toLocaleString('zh-CN') : String(value)
+}
+
+export default function DashboardTab(_props: { highlightNovelId?: string; onHighlightConsumed?: () => void }) {
+  const [data, setData] = useState<AdminStats | null>(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async (force = false) => {
+    setLoading(true)
+    setError('')
+    try {
+      const stats = (await adminApi.stats()) as unknown as AdminStats
+      setData(stats)
+    } catch (err) {
+      setError((err as Error).message || '未知错误')
+    } finally {
+      setLoading(false)
+    }
+    void force
+  }, [])
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const totals = data?.totals
+  const jobStatus = data?.jobStatus || { running: 0, completed: 0, failed: 0 }
+  const totalJobs = Math.max(1, jobStatus.running + jobStatus.completed + jobStatus.failed)
+
+  return (
+    <section className="tab-content">
+      <div className="admin-page-intro dashboard-hero">
+        <div>
+          <p className="detail-kicker">OVERVIEW</p>
+          <h2 className="section-title">后台总览</h2>
+          <p className="text-secondary text-sm">书库、抓取任务和站点数据的即时状态。</p>
+        </div>
+        <button className="btn btn--secondary btn--sm" onClick={() => void load(true)} disabled={loading}>
+          {loading ? '加载中…' : '刷新总览'}
+        </button>
+      </div>
+
+      {error ? (
+        <div className="dashboard-grid">
+          <div className="dashboard-error">总览加载失败：{error}</div>
+        </div>
+      ) : !data ? (
+        <div className="dashboard-grid">
+          <div className="dashboard-loading">加载中…</div>
+        </div>
+      ) : (
+        <>
+          <div className="dashboard-grid">
+            {STAT_CARDS.map((card) => {
+              const raw = totals ? totals[card.key] : 0
+              const value = card.key === 'dbSize' ? (raw || '—') : raw
+              return (
+                <div className="dashboard-stat-card" key={card.key}>
+                  <div className="dashboard-stat-card__mark" aria-hidden="true">{card.mark}</div>
+                  <div className="dashboard-stat-card__body">
+                    <div className="dashboard-stat-card__label">{card.label}</div>
+                    <div className="dashboard-stat-card__value">
+                      {formatNumber(value as number | string)}
+                      {card.unit && <span className="dashboard-stat-card__unit">{card.unit}</span>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="dashboard-status-strip">
+            <div className="dashboard-status-strip__head">
+              <span className="text-sm">任务状态</span>
+              <span className="text-xs text-muted">
+                运行 {jobStatus.running} · 完成 {jobStatus.completed} · 失败 {jobStatus.failed}
+              </span>
+            </div>
+            <div className="dashboard-status-bar" aria-hidden="true">
+              {(['running', 'completed', 'failed'] as const).map((key) => (
+                <div
+                  key={key}
+                  className={`dashboard-status-bar__seg dashboard-status-bar__seg--${key}`}
+                  style={{ width: `${(jobStatus[key] / totalJobs) * 100}%` }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="dashboard-panels">
+            <section className="dashboard-panel">
+              <div className="dashboard-panel__head">
+                <h3>最近抓取任务</h3>
+                <span className="text-xs text-muted">按更新时间</span>
+              </div>
+              <div className="dashboard-list">
+                {data.recentJobs.length === 0 ? (
+                  <div className="dashboard-empty">暂无抓取任务</div>
+                ) : (
+                  data.recentJobs.map((j) => (
+                    <div className="dashboard-list-item" key={j.id}>
+                      <div className="dashboard-list-item__main">
+                        <div className="dashboard-list-item__title">{j.novelTitle || j.novelId || j.id}</div>
+                        <div className="dashboard-list-item__meta">
+                          {(j.step || '任务') + ' · ' + timeAgo(j.updatedAt)}
+                        </div>
+                      </div>
+                      <span className={`dashboard-status-pill dashboard-status-pill--${j.status}`}>{jobStatusLabel(j.status)}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+            <section className="dashboard-panel">
+              <div className="dashboard-panel__head">
+                <h3>最近更新小说</h3>
+                <span className="text-xs text-muted">书库动态</span>
+              </div>
+              <div className="dashboard-list">
+                {data.recentNovels.length === 0 ? (
+                  <div className="dashboard-empty">暂无小说</div>
+                ) : (
+                  data.recentNovels.map((n) => (
+                    <Link className="dashboard-list-item" to={`/novel/${encodeURIComponent(n.id)}`} key={n.id}>
+                      <div className="dashboard-list-item__main">
+                        <div className="dashboard-list-item__title">{n.title}</div>
+                        <div className="dashboard-list-item__meta">
+                          {(n.author || '未知作者') + ' · ' + (n.chapterCount || 0) + ' 章 · ' + timeAgo(n.updatedAt)}
+                        </div>
+                      </div>
+                      <div className="dashboard-list-item__arrow">›</div>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}

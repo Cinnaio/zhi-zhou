@@ -10,6 +10,7 @@ import Reader from './pages/Reader'
 import Bookshelf from './pages/Bookshelf'
 import Profile from './pages/Profile'
 import Auth from './pages/Auth'
+import Admin from './pages/admin/Admin'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/auth" element={<Auth />} />
       </Route>
       <Route path="/read/:novelId/:chapterId" element={<Reader />} />
+      <Route path="/admin" element={<Admin />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
