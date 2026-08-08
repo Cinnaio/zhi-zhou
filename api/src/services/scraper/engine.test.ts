@@ -1,0 +1,143 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { PgScrapeStore, type JobData, type ScrapeStore } from './store'
+import { runScrapeJob, type ScrapeDeps } from './engine'
+import { createTestDb, type TestDb } from '../../test/db'
+import { setDbForTests } from '../../db/pool'
+
+// 模拟源站 HTML（czbooks 预设选择器：#chapter-list / .chapter-title / .content）
+const LIST_PAGE = `<html><head><meta charset="utf-8"><title>测试小说</title></head><body>
+<div id="chapter-list">
+  <li><a href="https://site.com/n/1/1?chapterNumber=1">第一章</a></li>
+  <li><a href="https://site.com/n/1/2?chapterNumber=2">第二章</a></li>
+</div>
+</body></html>`
+
+const CHAPTER_TEMPLATE = (title: string, body: string) => `<html><body>
+<h1 class="chapter-title">${title}</h1>
+<div class="content"><p>${body}</p></div>
+</body></html>`
+
+const LONG_BODY =
+  '这里是章节正文内容，写得比较长，足够通过内容长度检查，超过五十个字符肯定没有问题。我们继续写下去让这段文字更长更饱满，用来验证抓取入库的完整流程是否正常运作，确保清洗与字数统计都符合预期。'
+
+describe('scraper engine 端到端（pglite + mock fetch）', () => {
+  let t: TestDb
+  let store: ScrapeStore
+
+  beforeAll(async () => {
+    t = await createTestDb()
+    await t.applyMigrations()
+    setDbForTests(t.db)
+    process.env.DATABASE_URL = 'postgres://test/test'
+    store = new PgScrapeStore(t.db)
+  })
+
+  afterAll(async () => {
+    setDbForTests(null)
+    delete process.env.DATABASE_URL
+    await t.close()
+  })
+
+  function makeDeps(): ScrapeDeps & { logs: string[] } {
+    const logs: string[] = []
+    const fetchHtml = async (url: string) => {
+      // 章节目录页（novel URL）返回 LIST_PAGE；章节页（含 chapterNumber）返回章节内容
+      if (url.includes('chapterNumber')) {
+        return { html: CHAPTER_TEMPLATE(url.includes('chapterNumber=1') ? '第一章' : '第二章', LONG_BODY), encoding: 'utf-8' }
+      }
+      return { html: LIST_PAGE, encoding: 'utf-8' }
+    }
+    return {
+      store,
+      fetchHtml,
+      log: (_job, message) => logs.push(message),
+      logs,
+    }
+  }
+
+  it('完整抓取：目录→章节→入库→completed', async () => {
+    // 建小说 + 爬虫配置 + 任务
+    await t.db.query("INSERT INTO novels (id, title, author, created_at, updated_at) VALUES ('n1', '测试小说', '作者', $1, $1)", [Date.now()])
+    await store.upsertScrapeConfig({
+      novelId: 'n1',
+      sourceUrl: 'https://site.com/book/1/',
+      selectors: {
+        chapterList: '#chapter-list li a[href*="chapterNumber"]',
+        chapterTitle: '.chapter-title',
+        chapterContent: '.content',
+      },
+      encoding: 'utf-8',
+    })
+    const job: JobData = {
+      id: 'job_test1',
+      novelId: 'n1',
+      status: 'starting',
+      progress: 0,
+      current: 0,
+      total: 0,
+      chapterCount: 0,
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    await store.saveJob(job)
+
+    const deps = makeDeps()
+    await runScrapeJob('job_test1', deps)
+
+    const done = await store.loadJob('job_test1')
+    expect(done?.status).toBe('completed')
+    expect(done?.chapterCount).toBe(2)
+
+    // 章节已入库
+    const { rows: chapters } = await t.db.query<{ id: string; title: string; word_count: number }>(
+      'SELECT id, title, word_count FROM chapters WHERE novel_id = $1 ORDER BY sort_order',
+      ['n1'],
+    )
+    expect(chapters.length).toBe(2)
+    expect(chapters[0]!.title).toBe('第一章')
+    expect(chapters[0]!.word_count).toBeGreaterThan(20)
+
+    // 任务项状态
+    const summary = await store.getJobSummary('job_test1')
+    expect(summary.successCount).toBe(2)
+    expect(summary.failedCount).toBe(0)
+
+    // 小说 chapter_count 已更新
+    const novel = await t.db.query<{ chapter_count: number }>('SELECT chapter_count FROM novels WHERE id = $1', ['n1'])
+    expect(novel.rows[0]!.chapter_count).toBe(2)
+  })
+
+  it('目录无链接 → 任务 failed', async () => {
+    const badDeps: ScrapeDeps = {
+      store,
+      fetchHtml: async () => ({ html: '<html><body>empty</body></html>', encoding: 'utf-8' }),
+      log: () => {},
+    }
+    const job: JobData = { id: 'job_fail', novelId: 'n1', status: 'starting', startedAt: Date.now(), updatedAt: Date.now() }
+    await store.saveJob(job)
+    await runScrapeJob('job_fail', badDeps)
+    const done = await store.loadJob('job_fail')
+    expect(done?.status).toBe('failed')
+  })
+
+  it('增量更新：已有章节被跳过', async () => {
+    // 增量任务指向同一小说；第一章 source_url 已存在应跳过
+    const job: JobData = {
+      id: 'upd_test1',
+      novelId: 'n1',
+      updateMode: true,
+      status: 'starting',
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    await store.saveJob(job)
+    const deps = makeDeps()
+    await runScrapeJob('upd_test1', deps)
+
+    const done = await store.loadJob('upd_test1')
+    expect(done?.status).toBe('completed')
+    // 增量不应插入重复章节：章节数保持 2
+    const count = await t.db.query<{ c: number }>('SELECT COUNT(*)::int AS c FROM chapters WHERE novel_id = $1', ['n1'])
+    expect(count.rows[0]!.c).toBe(2)
+  })
+})

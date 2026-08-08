@@ -339,7 +339,7 @@ export function extractCategory(html: string, selector: string): string {
   return m ? m[1]!.trim() : raw.trim()
 }
 
-export function extractByPattern(html: string, selector: string, attribute: string): string {
+export function extractByPattern(html: string, selector: string, attribute = ''): string {
   if (!selector || !html) return ''
 
   if (selector === '.cataloginfo h3') {
