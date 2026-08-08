@@ -20,6 +20,7 @@
     "pinyin-pro": "^3.28"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@types/node": "^22",
     "@types/pg": "^8",
     "tsup": "^8",
