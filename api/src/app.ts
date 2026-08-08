@@ -3,6 +3,12 @@ import { escHtml } from '@shared/utils'
 import { loadConfig } from './config'
 import { cors } from './middlewares/cors'
 import { authRoutes } from './routes/auth'
+import { novelsRoutes } from './routes/novels'
+import { chaptersRoutes } from './routes/chapters'
+import { categoriesRoutes } from './routes/categories'
+import { progressRoutes } from './routes/progress'
+import { coverRoutes } from './routes/cover'
+import { avatarRoutes } from './routes/avatar'
 
 /** 全局应用：中间件装配 + 路由注册（阶段化增量挂载）。 */
 export const app = new Hono()
@@ -29,3 +35,9 @@ app.get('/api/health', (c) => {
 })
 
 app.route('/api/auth', authRoutes)
+app.route('/api/novels', novelsRoutes)
+app.route('/api/chapters', chaptersRoutes)
+app.route('/api/categories', categoriesRoutes)
+app.route('/api/progress', progressRoutes)
+app.route('/api/cover', coverRoutes)
+app.route('/api/avatar', avatarRoutes)

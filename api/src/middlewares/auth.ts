@@ -42,3 +42,19 @@ export function requireAdmin(): MiddlewareHandler<AuthEnv> {
     await next()
   }
 }
+
+/** 有 token 就解析用户（读进度等匿名可用的用户增强路由），无 token 不拦截。 */
+export function optionalUser(): MiddlewareHandler<AuthEnv> {
+  return async (c, next) => {
+    try {
+      const token = bearerToken(c.req.header('Authorization') || '')
+      if (token) {
+        const user = await getUserByToken(getDb(), token, loadConfig().sessionHashSalt)
+        if (user) c.set('user', user)
+      }
+    } catch {
+      // 未配置 DB 或解析失败：按匿名处理
+    }
+    await next()
+  }
+}

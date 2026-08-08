@@ -1,4 +1,4 @@
-import type { Db } from './pool'
+import type { Db, DbClient } from './pool'
 
 /** 单行查询，无结果返回 undefined。 */
 export async function first<T>(db: Db, text: string, params: unknown[] = []): Promise<T | undefined> {
@@ -16,4 +16,20 @@ export async function all<T>(db: Db, text: string, params: unknown[] = []): Prom
 export async function run(db: Db, text: string, params: unknown[] = []): Promise<number> {
   const { rowCount } = await db.query(text, params)
   return rowCount ?? 0
+}
+
+/** 在单个事务内执行操作（替代原 D1 batch 的多语句原子性）。 */
+export async function withTx<T>(db: Db, fn: (q: DbClient['query']) => Promise<T>): Promise<T> {
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await fn(client.query)
+    await client.query('COMMIT')
+    return result
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }
