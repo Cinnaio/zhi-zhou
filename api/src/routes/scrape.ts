@@ -65,7 +65,8 @@ scrapeRoutes.get('/', async (c) => {
     const summaries = await Promise.all(
       jobs.map(async (job) => {
         const summary = await store.getJobSummary(job.id)
-        return { ...job, summary }
+        // 汇总计数同时 merge 进顶层（与原项目行为一致，前端两处都可读）
+        return { ...job, ...summary, summary }
       }),
     )
     return c.json({ jobs: summaries })
@@ -74,7 +75,7 @@ scrapeRoutes.get('/', async (c) => {
     const job = await store.loadJob(jobId)
     if (!job) return c.json({ error: 'Job not found or expired' }, 404)
     const summary = await store.getJobSummary(jobId)
-    return c.json({ ...job, summary, recentLogs: await store.getJobLogs(jobId, { limit: 30 }), failedItems: await store.getJobItems(jobId, { status: 'failed', limit: 12 }) })
+    return c.json({ ...job, ...summary, summary, recentLogs: await store.getJobLogs(jobId, { limit: 30 }), failedItems: await store.getJobItems(jobId, { status: 'failed', limit: 12 }) })
   }
   if (action === 'items' && jobId) {
     return c.json({ items: await store.getJobItems(jobId, { status: c.req.query('status') || '', limit: Number(c.req.query('limit')) || 80 }) })

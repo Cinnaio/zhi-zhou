@@ -104,6 +104,8 @@ async function request<T = unknown>(method: string, path: string, body: unknown 
 
   const opts: RequestInit = { method, headers }
   if (hasBody) opts.body = JSON.stringify(body)
+  // 禁用浏览器 HTTP 缓存：管理员读写后必须拿到最新数据（后端 max-age 只留给 CDN/代理层）
+  opts.cache = 'no-store'
 
   const res = await timedFetch(url(path), opts)
   const data = await res.json().catch(() => ({})) as T & { error?: string }
@@ -481,13 +483,13 @@ export const adminApi = {
     setRegisterMode(registerMode: string): Promise<{ ok: boolean }> {
       return request('POST', '/admin-users', { action: 'settings', registerMode }, true)
     },
-    createInvites(count: number): Promise<{ invites: unknown[] }> {
+    createInvites(count: number): Promise<{ code: string; codes: string[] }> {
       return request('POST', '/admin-users', { action: 'invite', count }, true)
     },
     disableInvite(code: string): Promise<{ ok: boolean }> {
       return request('POST', '/admin-users', { action: 'disable-invite', code }, true)
     },
-    clearInvites(): Promise<{ ok: boolean }> {
+    clearInvites(): Promise<{ success: boolean; removed: number }> {
       return request('POST', '/admin-users', { action: 'clear-invites' }, true)
     },
     setStatus(id: string, status: string): Promise<{ ok: boolean }> {
@@ -496,7 +498,7 @@ export const adminApi = {
     setRole(id: string, role: string): Promise<{ ok: boolean }> {
       return request('POST', '/admin-users', { action: 'user-role', id, role }, true)
     },
-    resetPassword(id: string): Promise<{ newPassword?: string }> {
+    resetPassword(id: string): Promise<{ success: boolean; username: string; tempPassword: string }> {
       return request('POST', '/admin-users', { action: 'reset-password', id }, true)
     },
     deleteUser(id: string, confirmUsername: string): Promise<{ ok: boolean }> {

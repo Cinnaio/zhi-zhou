@@ -22,6 +22,8 @@ interface CustomSelectProps {
   searchPlaceholder?: string
   /** 搜索过滤（title/author/拼音），默认大小写不敏感子串 */
   filter?: (option: SelectOption, q: string) => boolean
+  /** 本地无命中时触发服务端补搜（如全库索引未覆盖） */
+  onServerSearch?: (query: string) => void
   className?: string
   disabled?: boolean
 }
@@ -36,6 +38,7 @@ export default function CustomSelect({
   searchable,
   searchPlaceholder = '搜索…',
   filter,
+  onServerSearch,
   className,
   disabled,
 }: CustomSelectProps) {
@@ -44,6 +47,7 @@ export default function CustomSelect({
   const [highlight, setHighlight] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const serverSearched = useRef(new Set<string>())
 
   const selected = options.find((o) => o.value === value)
 
@@ -53,6 +57,15 @@ export default function CustomSelect({
     const fn = filter || ((o: SelectOption, qq: string) => o.label.toLowerCase().includes(qq))
     return options.filter((o) => fn(o, q))
   }, [options, query, filter])
+
+  // 本地无命中且未补搜过 → 触发服务端补搜
+  useEffect(() => {
+    const q = query.trim()
+    if (q && filtered.length === 0 && onServerSearch && !serverSearched.current.has(q)) {
+      serverSearched.current.add(q)
+      onServerSearch(q)
+    }
+  }, [filtered.length, query, onServerSearch])
 
   useEffect(() => {
     if (!open) return
