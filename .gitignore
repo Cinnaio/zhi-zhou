@@ -1,0 +1,24 @@
+# ── 依赖 ──
+node_modules/
+
+# ── 构建产物 ──
+dist/
+coverage/
+
+# ── 环境与密钥 ──
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+.dev.vars
+
+# ── 日志 ──
+*.log
+
+# ── 本地数据 ──
+data/
+
+# ── OS / 编辑器 ──
+.DS_Store
+Thumbs.db

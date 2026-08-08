@@ -1,0 +1,21 @@
+{
+  "name": "zhi-zhou",
+  "version": "0.1.0",
+  "private": true,
+  "description": "知舟 — AI 中文小说阅读站（基于 Novel-KV 全量重写：React + Hono + TypeScript）",
+  "type": "module",
+  "workspaces": [
+    "web",
+    "api"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm run dev --workspace=@zhi-zhou/web",
+    "dev:api": "npm run dev --workspace=@zhi-zhou/api",
+    "build": "npm run build --workspace=@zhi-zhou/web && npm run build --workspace=@zhi-zhou/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate --workspace=@zhi-zhou/api",
+    "start": "npm run start --workspace=@zhi-zhou/api"
+  }
+}
