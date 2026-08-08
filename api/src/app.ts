@@ -9,6 +9,11 @@ import { categoriesRoutes } from './routes/categories'
 import { progressRoutes } from './routes/progress'
 import { coverRoutes } from './routes/cover'
 import { avatarRoutes } from './routes/avatar'
+import { bookshelfRoutes } from './routes/bookshelf'
+import { bookmarksRoutes } from './routes/bookmarks'
+import { thoughtsRoutes } from './routes/thoughts'
+import { ratingsRoutes } from './routes/ratings'
+import { commentsRoutes } from './routes/comments'
 
 /** 全局应用：中间件装配 + 路由注册（阶段化增量挂载）。 */
 export const app = new Hono()
@@ -41,3 +46,8 @@ app.route('/api/categories', categoriesRoutes)
 app.route('/api/progress', progressRoutes)
 app.route('/api/cover', coverRoutes)
 app.route('/api/avatar', avatarRoutes)
+app.route('/api/bookshelf', bookshelfRoutes)
+app.route('/api/bookmarks', bookmarksRoutes)
+app.route('/api/thoughts', thoughtsRoutes)
+app.route('/api/ratings', ratingsRoutes)
+app.route('/api/comments', commentsRoutes)

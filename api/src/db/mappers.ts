@@ -170,6 +170,30 @@ export function rowToThought(row: Record<string, unknown> | undefined | null): T
   }
 }
 
+export interface ThoughtAdmin extends Thought {
+  novelTitle: string
+  chapterTitle: string
+  userUsername: string
+  userDisplayName: string
+  clientIdHash: string
+  ipHash: string
+}
+
+export function rowToThoughtAdmin(row: Record<string, unknown> | undefined | null): ThoughtAdmin | null {
+  if (!row) return null
+  const base = rowToThought(row)
+  if (!base) return null
+  return {
+    ...base,
+    novelTitle: String(row.novel_title || ''),
+    chapterTitle: String(row.chapter_title || ''),
+    userUsername: String(row.user_username || ''),
+    userDisplayName: String(row.user_display_name || ''),
+    clientIdHash: String(row.client_id_hash || ''),
+    ipHash: String(row.ip_hash || ''),
+  }
+}
+
 export function rowToComment(row: Record<string, unknown> | undefined | null): Comment | null {
   if (!row) return null
   return {

@@ -3,6 +3,7 @@
  * 纯函数 + WebCrypto，不依赖数据库，便于单测。
  */
 import { webcrypto } from 'node:crypto'
+import { sha256Hex } from './hash'
 
 export const PASSWORD_ITERATIONS = 120000
 export const SESSION_TTL = 30 * 86400000
@@ -105,8 +106,7 @@ export function newId(prefix: string): string {
 
 /** 会话 token 只存摘要；salt 走环境变量，防离线彩虹表。 */
 export async function hashToken(token: string, salt: string): Promise<string> {
-  const digest = await webcrypto.subtle.digest('SHA-256', enc(salt + ':' + String(token || '')))
-  return toHex(new Uint8Array(digest))
+  return sha256Hex(salt, token)
 }
 
 export function deviceName(ua: string): string {
