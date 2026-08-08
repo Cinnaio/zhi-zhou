@@ -14,6 +14,7 @@ import { bookmarksRoutes } from './routes/bookmarks'
 import { thoughtsRoutes } from './routes/thoughts'
 import { ratingsRoutes } from './routes/ratings'
 import { commentsRoutes } from './routes/comments'
+import { scrapeRoutes } from './routes/scrape'
 
 /** 全局应用：中间件装配 + 路由注册（阶段化增量挂载）。 */
 export const app = new Hono()
@@ -51,3 +52,4 @@ app.route('/api/bookmarks', bookmarksRoutes)
 app.route('/api/thoughts', thoughtsRoutes)
 app.route('/api/ratings', ratingsRoutes)
 app.route('/api/comments', commentsRoutes)
+app.route('/api/scrape', scrapeRoutes)

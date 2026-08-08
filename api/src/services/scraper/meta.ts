@@ -6,6 +6,10 @@ import { resolveUrl } from './utils'
 import { buildCoverUrl, type SitePreset } from './presets'
 import { extractAttr, extractByPattern, extractInnerHtml, extractLinks, extractLinkHref, extractTextSmart, cleanText } from './parse'
 import { normalizeCategories, tokenizeConcatenatedTags } from '../categories'
+import type { FetchHtmlOptions, FetchResult } from './fetch'
+import type { ScrapeStore } from './store'
+import { getPresetForUrl } from './store'
+import { simplifyNovelForSource } from '../zh-convert'
 
 export interface ScrapeNovel {
   title: string
@@ -254,6 +258,59 @@ export function extractMetaGeneric(html: string, sourceUrl: string): ScrapeNovel
 export interface CollectLinksResult {
   links: Array<{ href: string; text: string }>
   limited: boolean
+}
+
+/** 元数据探测的依赖注入面（store 可为 null：无书源表时走静态预设+通用提取）。 */
+export interface MetaDeps {
+  store: ScrapeStore | null
+  fetchHtml: (url: string, opts?: FetchHtmlOptions) => Promise<FetchResult>
+}
+
+export interface DetectMetaResult {
+  novel: ScrapeNovel
+  site: { name: string; encoding: string }
+  selectors: Record<string, string>
+  chapterListUrl: string
+  chapterCount: number
+  hasMoreChapters: boolean
+  encoding: string
+}
+
+/** 智能分析：预设（静态/书源）→ 抓取 → 提取元数据 → 统计章节数。 */
+export async function detectMeta(sourceUrl: string, deps: MetaDeps): Promise<DetectMetaResult> {
+  const preset = (await getPresetForUrl(sourceUrl, deps.store)) as (SitePreset & { source?: string }) | null
+
+  const { html, encoding } = await deps.fetchHtml(sourceUrl, { forceEncoding: preset?.encoding })
+
+  let novel = preset?.meta ? extractMetaWithPreset(html, preset, sourceUrl) : extractMetaGeneric(html, sourceUrl)
+  applyTitleCategories(novel)
+  const simplified = simplifyNovelForSource(novel, sourceUrl)
+
+  let chapterListUrl = sourceUrl
+  if (preset?.urlTransform) chapterListUrl = preset.urlTransform(sourceUrl)
+
+  let chapterCount = 0
+  let hasMoreChapters = false
+  if (preset?.selectors?.chapterList) {
+    try {
+      const list = await deps.fetchHtml(chapterListUrl, { forceEncoding: encoding })
+      const counted = await collectChapterLinks(list.html, preset, chapterListUrl, encoding, (url) => deps.fetchHtml(url, { forceEncoding: encoding }))
+      chapterCount = counted.links.length
+      hasMoreChapters = counted.limited
+    } catch {
+      /* 章节统计失败不阻断分析 */
+    }
+  }
+
+  return {
+    novel: simplified,
+    site: preset ? { name: preset.name, encoding: preset.encoding } : { name: '通用', encoding: encoding || 'utf-8' },
+    selectors: preset?.selectors || { chapterList: '', chapterTitle: 'h1', chapterContent: 'article, .content, #content' },
+    chapterListUrl,
+    chapterCount,
+    hasMoreChapters,
+    encoding: encoding || 'utf-8',
+  }
 }
 
 /** 分页收集章节链接（fetch 由调用方注入，保持纯函数可测）。 */

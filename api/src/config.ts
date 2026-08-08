@@ -15,6 +15,8 @@ export interface AppConfig {
   configured: boolean
   corsOrigins: string[]
   sessionHashSalt: string
+  proxyBase: string
+  proxyDomains: string
   aiText: AiProviderConfig
   aiImage: AiProviderConfig
 }
@@ -43,6 +45,8 @@ export function loadConfig(): AppConfig {
     configured: Boolean(databaseUrl),
     corsOrigins,
     sessionHashSalt: process.env.SESSION_HASH_SALT?.trim() || 'zhi-zhou',
+    proxyBase: process.env.PROXY_BASE?.trim() || '',
+    proxyDomains: process.env.PROXY_DOMAINS?.trim() || process.env.PROXY_ALLOW_HOSTS?.trim() || '',
     aiText: {
       baseUrl: process.env.AI_TEXT_BASE_URL?.trim() || '',
       apiKey: process.env.AI_TEXT_API_KEY?.trim() || '',
