@@ -218,6 +218,71 @@ export function rowToComment(row: Record<string, unknown> | undefined | null): C
   }
 }
 
+export interface CommentAdmin extends Comment {
+  novelTitle: string
+  userUsername: string
+  userDisplayName: string
+  clientIdHash: string
+  ipHash: string
+}
+
+export function rowToCommentAdmin(row: Record<string, unknown> | undefined | null): CommentAdmin | null {
+  if (!row) return null
+  const base = rowToComment(row)
+  if (!base) return null
+  return {
+    ...base,
+    novelTitle: String(row.novel_title || ''),
+    userUsername: String(row.user_username || ''),
+    userDisplayName: String(row.user_display_name || ''),
+    clientIdHash: String(row.client_id_hash || ''),
+    ipHash: String(row.ip_hash || ''),
+  }
+}
+
+export interface CommentReport {
+  id: string
+  commentId: string
+  reportedBy: string
+  reason: string
+  note: string
+  status: string
+  resolvedBy: string
+  resolvedAt: number
+  createdAt: number
+  commentText: string
+  commentStatus: string
+  commentNovelId: string
+  commentAuthor: string
+  novelTitle: string
+  reporterUsername: string
+  reporterDisplayName: string
+  resolverUsername: string
+}
+
+export function rowToCommentReport(row: Record<string, unknown> | undefined | null): CommentReport | null {
+  if (!row) return null
+  return {
+    id: String(row.id),
+    commentId: String(row.comment_id),
+    reportedBy: String(row.reported_by || ''),
+    reason: String(row.reason || 'other'),
+    note: String(row.note || ''),
+    status: String(row.status || 'open'),
+    resolvedBy: String(row.resolved_by || ''),
+    resolvedAt: Number(row.resolved_at) || 0,
+    createdAt: Number(row.created_at),
+    commentText: String(row.comment_text || ''),
+    commentStatus: String(row.comment_status || ''),
+    commentNovelId: String(row.comment_novel_id || ''),
+    commentAuthor: String(row.comment_author || ''),
+    novelTitle: String(row.novel_title || ''),
+    reporterUsername: String(row.reporter_username || ''),
+    reporterDisplayName: String(row.reporter_display_name || ''),
+    resolverUsername: String(row.resolver_username || ''),
+  }
+}
+
 export function rowToRating(row: Record<string, unknown> | undefined | null): Rating | null {
   if (!row) return null
   return {

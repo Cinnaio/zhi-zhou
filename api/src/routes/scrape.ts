@@ -14,6 +14,7 @@ import { detectMeta } from '../services/scraper/meta'
 import { getPresetForUrl, PgScrapeStore, type JobData, type ScrapeStore } from '../services/scraper/store'
 import { parseLegadoJsonStream, normalizeSource, legadoHost, buildSourceRow, sourceToPreset } from '../services/scraper/legado'
 import { SITE_PRESETS, buildCoverUrl } from '../services/scraper/presets'
+import { discoverList, extractJjwxcTitles, extractPo18twTitles, proxyCover, searchPo18, searchTitleSources } from '../services/scraper/enrich'
 import { cacheCoverForNovel, getStoredCover, coverDataToBody } from '../services/covers'
 
 export const scrapeRoutes = new Hono()
@@ -48,7 +49,7 @@ function fireJob(jobId: string, deps: ScrapeDeps): void {
   })
 }
 
-scrapeRoutes.use('/', requireAdmin())
+scrapeRoutes.use('*', requireAdmin())
 
 // ---------- GET：任务/日志/配置 ----------
 
@@ -283,6 +284,58 @@ scrapeRoutes.post('/', async (c) => {
         return c.json(await testSelectors(url, preset.selectors, preset.encoding, deps))
       } catch (err) {
         return c.json({ error: `测试失败: ${(err as Error).message}` }, 502)
+      }
+    }
+    case 'discover': {
+      const { listUrl } = body
+      if (!listUrl) return c.json({ error: 'listUrl required' }, 400)
+      try {
+        const result = await discoverList(String(listUrl), { db, fetchHtml: deps.fetchHtml, getPreset: (url) => getPresetForUrl(url, deps.store) })
+        return c.json(result)
+      } catch (err) {
+        return c.json({ error: `获取列表失败: ${(err as Error).message}` }, 502)
+      }
+    }
+    case 'po18-search': {
+      const { query, searchType, page } = body
+      if (!query) return c.json({ error: 'query required' }, 400)
+      try {
+        return c.json(await searchPo18(String(query), String(searchType || 'articlename'), Number(page) || 1, db))
+      } catch (err) {
+        return c.json({ error: `搜索失败: ${(err as Error).message}` }, 502)
+      }
+    }
+    case 'title-source-search': {
+      const { title, author } = body
+      if (!title && !author) return c.json({ error: 'title or author required' }, 400)
+      return c.json(await searchTitleSources(String(title || '').trim(), String(author || '').trim()))
+    }
+    case 'jjwxc-titles': {
+      const { sourceUrl } = body
+      if (!sourceUrl) return c.json({ error: 'sourceUrl required' }, 400)
+      try {
+        return c.json(await extractJjwxcTitles(String(sourceUrl)))
+      } catch (err) {
+        return c.json({ error: (err as Error).message }, 400)
+      }
+    }
+    case 'po18tw-titles': {
+      const { sourceUrl } = body
+      if (!sourceUrl) return c.json({ error: 'sourceUrl required' }, 400)
+      try {
+        return c.json(await extractPo18twTitles(String(sourceUrl)))
+      } catch (err) {
+        return c.json({ error: (err as Error).message }, 502)
+      }
+    }
+    case 'cover': {
+      const { url } = body
+      if (!url) return c.json({ error: 'url required' }, 400)
+      try {
+        const { body: buf, contentType } = await proxyCover(String(url))
+        return new Response(buf, { headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400' } })
+      } catch (err) {
+        return c.json({ error: (err as Error).message }, 502)
       }
     }
     default:
